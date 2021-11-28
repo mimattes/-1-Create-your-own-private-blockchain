@@ -46,10 +46,10 @@ class Block {
           // Comparing if the hashes changed
           if (storedHash !== recalc) {
             // Returning the Block is not valid
-            return false;
+            reject(false);
           } else {
             // Returning the Block is valid
-            return true;
+            resolve(true);
           }
         });
     }
