@@ -192,6 +192,13 @@ class Blockchain {
     });
   }
 
+
+  #validatePredecessor(current, pred) {
+    return new Promise((resolve) => {
+      resolve(block.previousBlockHash === pred.hash)
+    });
+  }
+
   /**
      * This method will return a Promise that will resolve with the list of errors when validating
      * the chain.
@@ -209,12 +216,17 @@ class Blockchain {
             errorLog.push(`block with hash ${block.hash} is not valid`);
           }
         });
-        if (idx > 0 && self.chain[idx - 1].hash !== block.previousBlockHash) {
-          errorLog.push(`expected ${self.chain[idx - 1].hash} for predecessor of block with
-            hash ${block.hash}, but was ${block.previousBlockHash}`);
+
+        if (idx > 0) {
+          this.#validatePredecessor(block, self.chain[idx-1]).then((valid) => {
+            if (!valid) {
+              errorLog.push(`expected ${self.chain[idx - 1].hash} for predecessor of block with `
+                + `hash ${block.hash}, but was ${block.previousBlockHash}`);
+            }
+          });
         }
 
-        Promise.resolve(errorLog);
+        resolve(Promise.all(errorLog));
       });
     });
   }
