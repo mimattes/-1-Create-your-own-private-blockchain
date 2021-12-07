@@ -11,6 +11,7 @@
  const SHA256 = require('crypto-js/sha256');
  const BlockClass = require('./block.js');
  const bitcoinMessage = require('bitcoinjs-message');
+ const log = require('debug')('blockchain');
 
 class Blockchain {
   /**
@@ -57,7 +58,7 @@ class Blockchain {
      * assign the `timestamp` and the correct `height`...At the end you need to
      * create the `block hash` and push the block into the chain array. Don't for get
      * to update the `this.height`
-     * Note: the symbol `_` in the method name indicates in the javascript convention
+     * Note: the symbol `#` in the method name indicates in the javascript convention
      * that this method is a private method.
      */
   #addBlock(block) {
@@ -71,12 +72,26 @@ class Blockchain {
         }
         block.hash = SHA256(JSON.stringify(block)).toString();
         // add block to chain and increment height
+        
         self.chain.push(block);
         self.height += 1;
-        resolve(block);
+                
+        resolve(
+          this.validateChain().then((errors) => {
+            if (errors.length == 0) {
+              log(`added block ${block.hash}`);
+              return block;
+            } else {
+              log(`removing malformed block ${block}`);
+              self.chain.pop();
+              self.height -= 1;
+              reject("invalid block");
+            }          
+          })
+        );
       } catch (ex) {
         console.error(ex);
-        reject(new Error('Exception while adding block!'));
+        reject(new Error('Error while adding block!'));
       }
     });
   }
@@ -128,11 +143,14 @@ class Blockchain {
         if (verified) {
           const starObj = JSON.parse(star);
           const block = new BlockClass.Block({ data: starObj });
-          block.addressHash = SHA256(address).toString();
-          self.#addBlock(block);
-          resolve(block);
+          block.addressHash = SHA256(address).toString();                                
+          resolve(
+            self.#addBlock(block)
+          );
         } else {
-          reject(new Error('message could not be verified'));
+          reject(
+            new Error('message could not be verified')
+          );
         }
       } else {
         reject(new Error(`too much time elapsed: ${elapsed}s`));
@@ -194,8 +212,23 @@ class Blockchain {
 
 
   #validatePredecessor(current, pred) {
-    return new Promise((resolve) => {
-      resolve(block.previousBlockHash === pred.hash)
+    return new Promise((resolve, reject) => {
+      if (current.previousBlockHash === pred.hash) {
+        resolve();
+      } else {
+        reject(`expected ${pred.hash} for predecessor of block with `
+          + `hash ${block.hash}, but was ${block.previousBlockHash}`);
+      }
+    })
+  }
+
+  #validateBlock(block) {
+    return block.validate().then((valid) => {
+      if (valid) {
+        Promise.resolve();        
+      } else {
+        Promise.reject(`block with hash ${block.hash} is not valid`);
+      }
     });
   }
 
@@ -209,24 +242,27 @@ class Blockchain {
   validateChain() {
     const self = this;
     const errorLog = [];
-    return new Promise((resolve) => {
+    return new Promise((resolve) => {      
       self.chain.forEach((block, idx) => {
-        block.validate().then((valid) => {
-          if (!valid) {
-            errorLog.push(`block with hash ${block.hash} is not valid`);
-          }
-        });
-
+        
+        errorLog.push(
+          this.#validateBlock(block)
+        );
+        
         if (idx > 0) {
-          this.#validatePredecessor(block, self.chain[idx-1]).then((valid) => {
-            if (!valid) {
-              errorLog.push(`expected ${self.chain[idx - 1].hash} for predecessor of block with `
-                + `hash ${block.hash}, but was ${block.previousBlockHash}`);
-            }
-          });
+          errorLog.push(
+            this.#validatePredecessor(block, self.chain[idx-1])
+          );
         }
 
-        resolve(Promise.all(errorLog));
+        resolve(
+          Promise.all(errorLog)
+            .then(() => {
+              return [];
+            }).catch((errors) => {
+              return errors;
+            })
+        );
       });
     });
   }
