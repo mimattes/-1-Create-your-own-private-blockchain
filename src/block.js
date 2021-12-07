@@ -49,6 +49,7 @@ class Block {
               ...self,
               "hash": null
           }
+        )
       ).toString();
       // Returning the Block is valid
       resolve(storedHash !== recalc);
