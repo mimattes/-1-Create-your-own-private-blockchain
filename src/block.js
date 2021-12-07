@@ -52,7 +52,7 @@ class Block {
         )
       ).toString();
       // Returning the Block is valid
-      resolve(storedHash !== recalc);
+      resolve(storedHash === recalc);
     });
   }
 
