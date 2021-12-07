@@ -73,18 +73,16 @@ class Blockchain {
         block.hash = SHA256(JSON.stringify(block)).toString();
         // add block to chain and increment height
         
-        self.chain.push(block);
-        self.height += 1;
-                
+        const copy = [...self.chain, block];
+
         resolve(
-          this.validateChain().then((errors) => {
+          this.#validateChainWithParam(copy).then((errors) => {
             if (errors.length == 0) {
               log(`added block ${block.hash}`);
+              self.chain.push(block);
+              self.height += 1;                      
               return block;
             } else {
-              log(`removing malformed block ${block}`);
-              self.chain.pop();
-              self.height -= 1;
               reject("invalid block");
             }          
           })
@@ -232,18 +230,11 @@ class Blockchain {
     });
   }
 
-  /**
-     * This method will return a Promise that will resolve with the list of errors when validating
-     * the chain.
-     * Steps to validate:
-     * 1. You should validate each block using `validateBlock`
-     * 2. Each Block should check the with the previousBlockHash
-     */
-  validateChain() {
-    const self = this;
+
+  #validateChainWithParam(chain) {
     const errorLog = [];
     return new Promise((resolve) => {      
-      self.chain.forEach((block, idx) => {
+      chain.forEach((block, idx) => {
         
         errorLog.push(
           this.#validateBlock(block)
@@ -251,7 +242,7 @@ class Blockchain {
         
         if (idx > 0) {
           errorLog.push(
-            this.#validatePredecessor(block, self.chain[idx-1])
+            this.#validatePredecessor(block, chain[idx-1])
           );
         }
 
@@ -266,6 +257,17 @@ class Blockchain {
       });
     });
   }
+
+   /**
+     * This method will return a Promise that will resolve with the list of errors when validating
+     * the chain.
+     * Steps to validate:
+     * 1. You should validate each block using `validateBlock`
+     * 2. Each Block should check the with the previousBlockHash
+     */
+    validateChain() {
+      return this.#validateChainWithParam(this.chain);
+    }
 
 }
 
